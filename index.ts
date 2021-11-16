@@ -88,10 +88,11 @@ FROM
 
         // Run the query as a job
         const [job] = await bigquery.createQueryJob(options);
-        //console.log(`Job ${job.id} started.`);
-       // console.log(job.metadata)
+        const jobCreationDuration = new Date().getTime() - execStartTime
+
         // Wait for the query to finish
         const [rows] = await job.getQueryResults();
+        const afterGetQueryResults = new Date().getTime() - execStartTime
         let numOfRows = 0
 
         rows.forEach((row: any) => {
@@ -102,10 +103,13 @@ FROM
         const execDuration1 = new Date().getTime() - job.metadata.statistics.creationTime
         const execDuration2 = new Date().getTime() - execStartTime
        // console.log(job.metadata)
-        console.log(`${queryType} - account:${ (account<600)?"Small ":(account<900)?"Medium":"Large "}-${account}, `+
-            `Days:${(dateTo.getTime()-dateFrom.getTime())/1000 /24/60/60}, `+
-            `RunTime:${execDuration} ms / ${execDuration1} ms / ${execDuration2} ms, `+
-            `NumOfRows:${numOfRows}`)
+        console.log(`${queryType} - Account:${ (account<600)?"Small ":(account<900)?"Medium":"Large "} - ${account}, `+
+             `TotalTime:${execDuration2} ms, ` +
+            // sinceStatsStartTime:${execDuration} ms, sinceStatsCreationTime: ${execDuration1} ms, `+
+            `JobCreationTime:${jobCreationDuration} ms, QueryResultsTime:${afterGetQueryResults - jobCreationDuration} ms ` //+
+            //`Days:${(dateTo.getTime()-dateFrom.getTime())/1000 /24/60/60}, `+
+            //`NumOfRows:${numOfRows}`
+        )
     }
     enum QueryTypeEnum {
         global=  'global analytics  ' ,
