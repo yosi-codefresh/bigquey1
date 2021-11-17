@@ -103,11 +103,11 @@ async function query(account: number, dateFrom: Date, dateTo:Date, queryType: Qu
     const execDuration2 = new Date().getTime() - execStartTime
     // console.log(job.metadata)
     console.log(`${queryType} - Account:${ (account<600)?"Small ":(account<900)?"Medium":"Large "} - ${account}, `+
-        `TotalTime:${execDuration2} ms, ` +
+        `TotalTime:${execDuration2.toString().padStart(5,' ')} ms, ` +
         // sinceStatsStartTime:${execDuration} ms, sinceStatsCreationTime: ${execDuration1} ms, `+
-        `JobCreationTime:${jobCreationDuration} ms, QueryResultsTime:${afterGetQueryResults - jobCreationDuration} ms ` //+
+        `JobCreationTime:${jobCreationDuration.toString().padStart(5,' ')} ms, QueryResultsTime:${(afterGetQueryResults - jobCreationDuration).toString().padStart(5, ' ')} ms ` //+
         //`Days:${(dateTo.getTime()-dateFrom.getTime())/1000 /24/60/60}, `+
-        //`NumOfRows:${numOfRows}`
+        +`NumOfRows:${numOfRows.toString().padStart(3, ' ')}`
     )
 }
 async function runQueries(): Promise<number>  {
@@ -137,8 +137,9 @@ async function runQueries(): Promise<number>  {
 
 function main() {
     //runQueries()
-    for (let i = 0; i < 5; i++) {
-        runQueries()
+    const numOfIterations = process.env.LOOP_COUNT ? process.env.LOOP_COUNT : 100
+    for (let i = 0; i < numOfIterations; i++) {
+        setTimeout(runQueries, i*600)
     }
 }
 
