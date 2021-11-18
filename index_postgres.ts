@@ -1,3 +1,5 @@
+const { v4: uuidv4 } = require('uuid');
+
 const { Pool } = require('pg')
 const pool = new Pool(
     {user: 'postgres',
@@ -20,6 +22,11 @@ enum QueryTypeEnum {
     global=  'global analytics  ' ,
     pipeline='pipeline analytics',
     top10=   'top10             '
+}
+
+enum DatabaseTypeEnum {
+    postgres = 'postgres',
+    bigQuery = 'bitQuery'
 }
 
 const queryGlobalStats = (accountId: number, dateFrom: Date, dateTo:Date) =>
@@ -92,6 +99,7 @@ const queryTop10Stats = (accountId: number, dateFrom: Date, dateTo:Date) =>
     group by 1,	2,	3
     order by 5 desc`
 
+
 function prepareQuery(account: number, dateFrom: Date, dateTo: Date, queryType: QueryTypeEnum, pipelineID: number | undefined) : string {
     let queryToRun: string = '';
 
@@ -112,10 +120,14 @@ function prepareQuery(account: number, dateFrom: Date, dateTo: Date, queryType: 
     return queryToRun
 }
 
-async function query(account: number, dateFrom: Date, dateTo:Date, queryType: QueryTypeEnum, pipelineID?: number ) {
+async function query(dateFrom: Date, dateTo:Date, queryType: QueryTypeEnum, runId: any , pipelineID?: number) {
+    const min = 1
+    const max = 1000
+    const account = Math.floor(Math.random() * (max - min + 1)) + min
     let totalTime, untilQueryTime;
     let queryToRun : string = prepareQuery(account, dateFrom, dateTo,queryType, pipelineID);
     const execStartTime = new Date().getTime();
+    const execStartTimeDate = Date.now()
     const client = await pool.connect()
     const getClientFromPoolTime = new Date().getTime() - execStartTime
     let numOfRows = 0;
@@ -133,42 +145,59 @@ async function query(account: number, dateFrom: Date, dateTo:Date, queryType: Qu
         client.release()
     }
 
-    console.log(`${queryType} - Account:${ (account<600)?"Small ":(account<900)?"Medium":"Large "} - ${account}, `+
+    const accountType = (account<600)?"Small":(account<900)?"Medium":"Large";
+    console.log(`${queryType} - Account:${accountType.padEnd(6,' ')} - ${account}, `+
         `TotalTime:${totalTime.toString().padStart(5,' ')} ms, getFromPoolTime:${getClientFromPoolTime.toString().padStart(5,' ')} ms, executeQueryTime:${(untilQueryTime - getClientFromPoolTime).toString().padStart(5,' ')}, `+
         `fetchTime:${(totalTime - untilQueryTime).toString().padStart(5,' ')}, numOfRows:${numOfRows.toString().padStart(3,' ')}`)
-}
 
+
+    const insertValues = [DatabaseTypeEnum.postgres, accountType, account, new Date(dateFrom), new Date(dateTo), new Date(execStartTimeDate), totalTime, numOfRows, queryType, pipelineID, runId]
+    await client.query(insertStatement, insertValues, )
+    await client.query('commit')
+}
+const insertStatement =
+    'insert into analytics.benchmark_table (database_type, account_type, account_id, start_time_From, start_time_to, exec_start_time,elapsed_time, num_of_records,query_type,pipeline_id, run_id)' +
+    'values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, $11)'
 
 async function runQueries(): Promise<number>  {
     const dateStart = new Date(2021,11,11)
     const dateTo7Days = new Date(2021,11,18)
     const dateTo90Days = new Date(2022,2,10)
-
-    const promises = [
-        query(101, dateStart,  dateTo7Days, QueryTypeEnum.global),
-        query(102, dateStart,  dateTo90Days, QueryTypeEnum.global),
-        query(103, dateStart, dateTo7Days, QueryTypeEnum.top10),
-        query(104, dateStart, dateTo90Days,QueryTypeEnum.top10),
-        query(105, dateStart, dateTo90Days,QueryTypeEnum.pipeline, 101),
-        query(105, dateStart, dateTo90Days,QueryTypeEnum.pipeline, 1),
-        query(105, dateStart, dateTo90Days,QueryTypeEnum.pipeline, 81),
-        query(701, dateStart,  dateTo7Days, QueryTypeEnum.global),
-        query(702, dateStart,  dateTo90Days, QueryTypeEnum.global),
-        query(703, dateStart, dateTo7Days, QueryTypeEnum.top10),
-        query(704, dateStart, dateTo90Days,QueryTypeEnum.top10),
-        query(105, dateStart, dateTo90Days,QueryTypeEnum.pipeline, 1),
-        query(105, dateStart, dateTo90Days,QueryTypeEnum.pipeline, 81),
-        query(705, dateStart, dateTo90Days,QueryTypeEnum.pipeline, 101)
+    const runId = uuidv4();
+    const min = 1
+    const max = 100
+    const accountId = Math.floor(Math.random() * (max - min + 1)) + min
+    const queryArgs = [
+            [dateStart,  dateTo7Days, QueryTypeEnum.global, runId],
+            [dateStart,  dateTo90Days, QueryTypeEnum.global, runId],
+            [dateStart, dateTo7Days, QueryTypeEnum.top10, runId],
+            [dateStart, dateTo90Days,QueryTypeEnum.top10, runId],
+            [dateStart, dateTo90Days,QueryTypeEnum.pipeline, runId, 101],
+            [dateStart, dateTo90Days,QueryTypeEnum.pipeline, runId, 1],
+            [dateStart, dateTo90Days,QueryTypeEnum.pipeline, runId, 81],
+            [dateStart,  dateTo7Days, QueryTypeEnum.global, runId],
+            [dateStart,  dateTo90Days, QueryTypeEnum.global, runId],
+            [dateStart, dateTo7Days, QueryTypeEnum.top10, runId],
+            [dateStart, dateTo90Days,QueryTypeEnum.top10, runId],
+            [dateStart, dateTo90Days,QueryTypeEnum.pipeline, runId, 1],
+            [dateStart, dateTo90Days,QueryTypeEnum.pipeline, runId, 81],
+            [dateStart, dateTo90Days,QueryTypeEnum.pipeline, runId, 101]
     ]
-    await Promise.all(promises)
+
+    queryArgs.forEach((queryArgs: any, ind) => {
+        setTimeout(query, ind*300,...queryArgs);
+    })
+
+
     return 1
 }
 
 function main() {
     //runQueries()
+
     const numOfIterations = process.env.LOOP_COUNT ? process.env.LOOP_COUNT : 100
     for (let i = 0; i < numOfIterations; i++) {
-        setTimeout(runQueries, i * 600) // runQueries()
+        setTimeout(runQueries, i * 1000) // runQueries()
     }
 }
 
